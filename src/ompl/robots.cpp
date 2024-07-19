@@ -1,4 +1,5 @@
 #include "dynoplan/ompl/robots.h"
+#include <iterator>
 #include <memory>
 
 #include "dynobench/dyno_macros.hpp"
@@ -20,6 +21,7 @@
 #include <ompl/datastructures/NearestNeighbors.h>
 #include <ompl/datastructures/NearestNeighborsGNATNoThreadSafety.h>
 #include <ompl/datastructures/NearestNeighborsSqrtApprox.h>
+#include <random>
 
 #include "dynoplan/ompl/fclHelper.hpp"
 
@@ -3060,8 +3062,10 @@ robot_factory_ompl(const dynobench::Problem &problem) {
 
 void load_motion_primitives_new(const std::string &motionsFile,
                                 dynobench::Model_robot &robot,
-                                std::vector<Motion> &motions, int max_motions,
-                                bool cut_actions, bool shuffle,
+                                std::vector<Motion> &motions, 
+                                int max_motions,
+                                bool cut_actions, 
+                                bool shuffle,
                                 bool compute_col,
                                 MotionPrimitiveFormat format) {
 
@@ -3101,6 +3105,12 @@ void load_motion_primitives_new(const std::string &motionsFile,
   }
   }
 
+  if (shuffle) {
+    /*std::cout << "SHUFFLING !!!!!!" << std::endl;*/
+    std::random_device rd;
+    std::shuffle(std::begin(trajs.data), std::end(trajs.data),
+                 std::default_random_engine{ rd() });
+  }
   if (max_motions < trajs.data.size())
     trajs.data.resize(max_motions);
 
@@ -3114,8 +3124,8 @@ void load_motion_primitives_new(const std::string &motionsFile,
   CSTR_(add_noise_first_state);
 
   if (add_noise_first_state) {
-    std::cout << "WARNING:" << "adding noise to first and last state"
-              << std::endl;
+    std::cout << "WARNING:"
+              << "adding noise to first and last state" << std::endl;
     const double noise = 1e-7;
     for (auto &t : trajs.data) {
       t.states.front() +=
@@ -3162,13 +3172,18 @@ void load_motion_primitives_new(const std::string &motionsFile,
     NOT_IMPLEMENTED;
   }
 
-  if (shuffle) {
-    std::shuffle(std::begin(motions), std::end(motions),
-                 std::default_random_engine{});
-  }
+  /*if (shuffle) {*/
+  /*  std::cout << "SHUFFLING !!!!!!" << std::endl;*/
+  /*  std::random_device rd;*/
+  /*  std::shuffle(std::begin(motions), std::end(motions),*/
+  /*               std::default_random_engine{rd() });*/
+  /*}*/
+  /**/
+  /*motions.resize(trajs.data.size());*/
 
   for (size_t idx = 0; idx < motions.size(); ++idx) {
     motions[idx].idx = idx;
+    /*std::cout << motions[idx].getStateEig().format(dynobench::FMT) <<std::endl;*/
     // motions[idx].last_state_translated = motions[idx].traj.states.back();
   }
 }
