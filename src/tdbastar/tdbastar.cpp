@@ -5,6 +5,7 @@
 
 // #include <flann/flann.hpp>
 // #include <msgpack.hpp>
+#include <iostream>
 #include <ompl/base/spaces/SE2StateSpace.h>
 #include <yaml-cpp/yaml.h>
 
@@ -152,6 +153,7 @@ void from_solution_to_yaml_and_traj(dynobench::Model_robot &robot,
       *out << "    actions: []" << std::endl;
     }
     traj_out.states.push_back(result.front().first->state_eig);
+    /*traj_out.primitives.push_back(result.front().first->)*/
   }
 
   if (out) {
@@ -220,6 +222,7 @@ void from_solution_to_yaml_and_traj(dynobench::Model_robot &robot,
       take_num_states = take_until + 1;
 
     DYNO_CHECK_LEQ(take_num_states, xs.size(), AT);
+    std::vector<Eigen::VectorXd> primitive_states;
     for (size_t k = 0; k < take_num_states; ++k) {
       if (k < take_num_states - 1) {
 
@@ -227,21 +230,25 @@ void from_solution_to_yaml_and_traj(dynobench::Model_robot &robot,
           *out << space6 << "- ";
         }
         traj_out.states.push_back(xs.at(k));
+        primitive_states.push_back(xs.at(k));
       } else if (i == result.size() - 2) {
         if (out) {
           *out << space6 << "- ";
         }
         traj_out.states.push_back(result[i + 1].first->state_eig);
+        primitive_states.push_back(result[i + 1].first->state_eig);
         // change the parent of the last node before it goes out of the queue.
       } else {
         if (out) {
           *out << space6 << "# (last state) ";
         }
+        primitive_states.push_back(xs.at(k));
       }
       if (out) {
         *out << xs.at(k).format(FMT) << std::endl;
       }
     }
+    traj_out.primitive_states.push_back(primitive_states);
 
     // Continue here!!
     // Just get state + motion
@@ -276,10 +283,12 @@ void from_solution_to_yaml_and_traj(dynobench::Model_robot &robot,
     }
     DYNO_CHECK_LEQ(take_num_actions, motion.actions.size(), AT);
     if (out) {
-      *out << space6 + "# " << "take_num_actions " << take_num_actions
-           << std::endl;
+      *out << space6 + "# "
+           << "take_num_actions " << take_num_actions << std::endl;
     }
 
+
+    std::vector<Eigen::VectorXd> primitive_actions;
     for (size_t k = 0; k < take_num_actions; ++k) {
       const auto &action = motion.traj.actions.at(k);
       if (out) {
@@ -289,7 +298,9 @@ void from_solution_to_yaml_and_traj(dynobench::Model_robot &robot,
       }
       Eigen::VectorXd x;
       traj_out.actions.push_back(action);
+      primitive_actions.push_back(action);
     }
+    traj_out.primitive_actions.push_back(primitive_actions);
     if (out)
       *out << std::endl;
   }
@@ -675,19 +686,22 @@ void tdbastar(
     if (static_cast<size_t>(time_bench.expands) >=
         options_tdbastar.max_expands) {
       status = Terminate_status::MAX_EXPANDS;
-      std::cout << "BREAK search:" << "MAX_EXPANDS" << std::endl;
+      std::cout << "BREAK search:"
+                << "MAX_EXPANDS" << std::endl;
       return true;
     }
 
     if (watch.elapsed_ms() > options_tdbastar.search_timelimit) {
       status = Terminate_status::MAX_TIME;
-      std::cout << "BREAK search:" << "MAX_TIME" << std::endl;
+      std::cout << "BREAK search:"
+                << "MAX_TIME" << std::endl;
       return true;
     }
 
     if (open.empty()) {
       status = Terminate_status::EMPTY_QUEUE;
-      std::cout << "BREAK search:" << "EMPTY_QUEUE" << std::endl;
+      std::cout << "BREAK search:"
+                << "EMPTY_QUEUE" << std::endl;
       return true;
     }
 
@@ -906,7 +920,7 @@ void tdbastar(
         break;
       }
     } // end of lazy_trajs loop
-  } // out of while loop
+  }   // out of while loop
 
   time_bench.time_search = watch.elapsed_ms();
 
@@ -1004,6 +1018,43 @@ void tdbastar(
       std::make_pair("delta", std::to_string(options_tdbastar.delta)));
   out_info_tdb.data.insert(
       std::make_pair("num_primitives", std::to_string(motions.size())));
+}
+
+void write_heu_map(const std::vector<Heuristic_node> &heu_map, const char *file,
+                   const char *header) {
+  std::ofstream out(file);
+
+  if (header) {
+    out << header << std::endl;
+  }
+  const char *four_space = "    ";
+  out << "heu_map:" << std::endl;
+  for (auto &v : heu_map) {
+    out << "  -" << std::endl;
+    out << four_space << "x: " << v.x.format(FMT) << std::endl;
+    out << four_space << "d: " << v.d << std::endl;
+    out << four_space << "p: " << v.p << std::endl;
+  }
+}
+
+void load_heu_map(const char *file, std::vector<Heuristic_node> &heu_map) {
+  std::cout << "loading heu map -- file: " << file << std::endl;
+  std::ifstream in(file);
+  CHECK(in.is_open(), AT);
+  YAML::Node node = YAML::LoadFile(file);
+
+  if (node["heu_map"]) {
+
+    for (const auto &state : node["heu_map"]) {
+      std::vector<double> x = state["x"].as<std::vector<double>>();
+      Eigen::VectorXd xe = Eigen::VectorXd::Map(x.data(), x.size());
+      double d = state["d"].as<double>();
+      int p = state["p"].as<double>();
+      heu_map.push_back({xe, d, p});
+    }
+  } else {
+    ERROR_WITH_INFO("missing map key");
+  }
 }
 
 } // namespace dynoplan
