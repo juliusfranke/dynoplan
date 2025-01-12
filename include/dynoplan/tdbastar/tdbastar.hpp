@@ -55,7 +55,9 @@ struct AStarNode {
   double fScore;
   double gScore;
   double hScore;
+
   std::vector<int> motions{}; // list of applicable motions
+  // std::vector<int> conflicts{};
 
   double get_cost() const { return gScore; }
 
@@ -72,7 +74,9 @@ struct AStarNode {
   // can arrive at this node at time gScore, starting from came_from, using
   // motion used_motion
   struct arrival {
-    float gScore;
+    double gScore;
+    double fScore;
+    int focalHeuristic;
     // AStarNode* came_from;
     std::shared_ptr<AStarNode> came_from;
     size_t used_motion;
@@ -80,6 +84,10 @@ struct AStarNode {
   };
   std::vector<arrival> arrivals;
   size_t current_arrival_idx;
+
+  // These two values are updated when we reconstruct the FOCAL list from OPEN
+  int bestFocalHeuristic; // ecbs
+  size_t best_focal_arrival_idx;
 
   const ob::State *getState() { return state; }
   const Eigen::VectorXd &getStateEig() { return state_eig; }
@@ -189,9 +197,10 @@ struct LazyTraj {
                                  num_valid_states);
 
     }
-    // reverse, assumes 2d
+    // reverse
     else {
-      robot->transform_primitive(*offset - motion->traj.states.back().head(2),
+      robot->transform_primitive(*offset - motion->traj.states.back().head(
+                                               robot->translation_invariance),
                                  motion->traj.states, motion->traj.actions, tmp,
                                  check_state, num_valid_states);
     }
@@ -244,8 +253,8 @@ struct Expander {
   void expand_lazy(Eigen::Ref<const Eigen::VectorXd> x,
                    std::vector<LazyTraj> &lazy_trajs) {
 
-    robot->canonical_state(x, canonical_state);
-    robot->offset(x, offset);
+    robot->canonical_state(x, canonical_state); // same as state size
+    robot->offset(x, offset);                   // only position part
     fakeMotion.traj.states.at(0) = canonical_state;
     assert(delta > 0);
 

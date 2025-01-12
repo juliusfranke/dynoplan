@@ -1965,7 +1965,11 @@ void trajectory_optimization(const dynobench::Problem &problem,
     traj.multi_robot_index_goal = ptr_derived->goal_times;
   }
 
-  load_env(*model_robot, problem);
+  if (problem.time_varying_obstacles.size()) {
+    load_time_varying_env(*model_robot, problem);
+  } else {
+    load_env(*model_robot, problem);
+  }
 
   size_t _nx = model_robot->nx; // state
   size_t _nu = model_robot->nu;

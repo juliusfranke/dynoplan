@@ -218,7 +218,6 @@ public:
 
   double cost;
   size_t idx;
-  // std::string name;
   bool disabled = false;
   double get_cost() const { return cost; }
 
@@ -232,6 +231,12 @@ public:
 
   const Eigen::VectorXd &getStateEig() const { return traj.states.front(); }
   const Eigen::VectorXd &getLastStateEig() const { return traj.states.back(); }
+  const Eigen::VectorXd
+  getLastStateEigCanonical(size_t translation_invariance) const {
+    Eigen::VectorXd m = traj.states.back();
+    m.head(translation_invariance).setZero();
+    return m;
+  }
 };
 
 enum class MotionPrimitiveFormat { BOOST, YAML, JSON, MSGPACK, AUTO };

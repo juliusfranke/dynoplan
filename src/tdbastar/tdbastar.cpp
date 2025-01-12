@@ -131,11 +131,15 @@ void from_solution_to_yaml_and_traj(dynobench::Model_robot &robot,
 
   std::shared_ptr<AStarNode> n = solution;
   size_t arrival_idx = n->current_arrival_idx;
+  // size_t arrival_idx = n->best_focal_arrival_idx;
   while (n != nullptr) {
     result.push_back(std::make_pair(n, arrival_idx));
-    const auto &arrival = n->arrivals[arrival_idx];
-    n = arrival.came_from;
-    arrival_idx = arrival.arrival_idx;
+    const auto &arrival =
+        n->arrivals[arrival_idx]; // get the struct, exact one using arrival_idx
+    n = arrival.came_from;        // get the parent
+    arrival_idx = arrival.arrival_idx; // get the best_node.current_arrival_idx
+                                       // in order to get
+    // the exact element of the current node's arrivals vector.
   }
 
   std::reverse(result.begin(), result.end());
@@ -411,7 +415,6 @@ bool check_lazy_trajectory(
     }
   });
   time_bench.num_col_motions++;
-  // check with constraints
   // std::cout << "Printing the tmp traj: " << std::endl;
   // for (auto tr : tmp_traj.get_states()){
   //     std::cout << tr.format(dynobench::FMT) << std::endl;
@@ -424,36 +427,29 @@ bool check_lazy_trajectory(
   } else {
     reachesGoal = robot.distance(tmp_traj.get_state(0), goal) <= delta;
   }
-  for (const auto &constraint : constraints) {
-    // a constraint violation can only occur between t in [current->gScore,
-    // tentative_gScore]
-    float time_offset = constraint.time - best_node_gScore;
-    int time_index = std::lround(time_offset / robot.ref_dt);
-    Eigen::VectorXd state_to_check;
-    if (reachesGoal && time_index >= (int)tmp_traj.get_size() - 1) {
-      state_to_check = tmp_traj.get_state(tmp_traj.get_size() - 1);
-    }
-    if (time_index >= 0 && time_index < (int)tmp_traj.get_size() - 1) {
-      state_to_check = tmp_traj.get_state(time_index);
-    }
-
-    if (state_to_check.size() > 0) {
-      bool violation =
-          robot.distance(state_to_check, constraint.constrained_state) <= delta;
-      if (violation) {
-        motion_valid = false;
-        // std::cout << "VIOLATION inside lazy traj check" << time_index << " "
-        // << tmp_traj.get_size() << std::endl; std::cout << "State to check: "
-        // << state_to_check.format(dynobench::FMT) << std::endl; std::cout <<
-        // "Constraint state: " <<
-        // constraint.constrained_state.format(dynobench::FMT) << std::endl;
-        // throw std::runtime_error("Internal error: constraint violation in
-        // check lazy trajectory!");
-        break;
+  time_bench.time_check_constraints += timed_fun_void([&] {
+    for (const auto &constraint : constraints) {
+      // a constraint violation can only occur between t in [current->gScore,
+      // tentative_gScore]
+      float time_offset = constraint.time - best_node_gScore;
+      int time_index = std::lround(time_offset / robot.ref_dt);
+      Eigen::VectorXd state_to_check;
+      if (reachesGoal && time_index >= (int)tmp_traj.get_size() - 1) {
+        state_to_check = tmp_traj.get_state(tmp_traj.get_size() - 1);
+      }
+      if (time_index >= 0 && time_index < (int)tmp_traj.get_size() - 1) {
+        state_to_check = tmp_traj.get_state(time_index);
+      }
+      if (state_to_check.size() > 0) {
+        bool violation = robot.distance(state_to_check,
+                                        constraint.constrained_state) <= delta;
+        if (violation) {
+          motion_valid = false;
+          break;
+        }
       }
     }
-  }
-  // std::cout << "Motion validity: " << motion_valid << std::endl;
+  });
   return motion_valid;
 };
 
@@ -632,11 +628,16 @@ void tdbastar(
   start_node->reaches_goal =
       (robot->distance(problem.starts[robot_id], problem.goals[robot_id]) <=
        options_tdbastar.delta);
-  start_node->arrivals.push_back({.gScore = 0,
-                                  .came_from = nullptr,
-                                  .used_motion = (size_t)-1,
-                                  .arrival_idx = (size_t)-1});
-  start_node->current_arrival_idx = 0;
+  start_node->arrivals.push_back(
+      {.gScore = 0,
+       .came_from = nullptr,
+       .used_motion = (size_t)-1,
+       .arrival_idx = (size_t)-1}); // points where to look for the parent. When
+                                    // tracing back it is equal to the
+  // current_arrival_idx of the current node, because it was used while
+  // creating/updating the node.
+  start_node->current_arrival_idx = 0; // which element of this node's arrivals
+                                       // vector, the last element/current one
 
   DYNO_CHECK_GEQ(start_node->hScore, 0, "hScore should be positive");
   DYNO_CHECK_LEQ(start_node->hScore, 1e5, "hScore should be bounded");
@@ -993,7 +994,7 @@ void tdbastar(
       float dist = robot->distance(traj_out.states.at(time_index),
                                    constraint.constrained_state);
       if (dist <= options_tdbastar.delta) {
-        std::cout << "VIOLATION in solution  " << dist << " "
+        std::cout << "VIOLATION in solution, distance:  " << dist << " "
                   << "time index in solution: " << time_index << " "
                   << std::endl;
         std::cout << traj_out.states.at(time_index).format(dynobench::FMT)

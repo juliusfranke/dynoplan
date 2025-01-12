@@ -611,51 +611,99 @@ void Col_cost::calcDiff(Eigen::Ref<Eigen::VectorXd> Lx,
   }
 };
 
-// void Col_cost::calcDiff(Eigen::Ref<Eigen::MatrixXd> Jx,
-//                         Eigen::Ref<Eigen::MatrixXd> Ju,
-//                         const Eigen::Ref<const Vxd> &x,
-//                         const Eigen::Ref<const Vxd> &u) {
-//
-//   assert(static_cast<std::size_t>(x.size()) == nx);
-//   assert(static_cast<std::size_t>(u.size()) == nu);
-//
-//   std::vector<double> query{x.data(), x.data() + nx_effective};
-//   double raw_d, d;
-//   Vxd v(nx);
-//   bool check_one =
-//       (x - last_x).squaredNorm() < 1e-8 && (last_raw_d - margin) > 0;
-//   bool check_two = (last_raw_d - margin) > 0 &&
-//                    (x - last_x).norm() < sec_factor * (last_raw_d -
-//                    margin);
-//
-//   if (check_one || check_two) {
-//     Jx.setZero();
-//   } else {
-//     auto out = cl->distanceWithFDiffGradient(
-//         query, faraway_zero_gradient_bound, epsilon,
-//         non_zero_flags.size() ? &non_zero_flags : nullptr);
-//     raw_d = std::get<0>(out);
-//     last_x = x;
-//     last_raw_d = raw_d;
-//     d = options_trajopt.collision_weight * (raw_d - margin);
-//     auto grad = std::get<1>(out);
-//     v = options_trajopt.collision_weight * Vxd::Map(grad.data(),
-//     grad.size()); if (d <= 0) {
-//       Jx.block(0, 0, 1, nx_effective) = v.transpose();
-//     } else {
-//       Jx.setZero();
-//     }
-//   }
-//   Ju.setZero();
-// };
+Col_cost_moving::Col_cost_moving(size_t time_index, size_t nx, size_t nu,
+                                 size_t nr,
+                                 std::shared_ptr<dynobench::Model_robot> model,
+                                 double weight, bool hard_constrained_collision)
+    : Cost(nx, nu, nr), time_index(time_index), model(model), weight(weight),
+      hard_constrained_collision(hard_constrained_collision) {
+  last_x = Vxd::Ones(nx);
+  name = "collision";
+  nx_effective = nx;
 
-// void Col_cost::calcDiff(Eigen::Ref<Eigen::MatrixXd> Jx,
-//                         const Eigen::Ref<const Vxd> &x) {
-//
-//   auto Ju = Eigen::MatrixXd(1, 1);
-//   auto u = Vxd(1);
-//   calcDiff(Jx, Ju, x, u);
-// }
+  Jx.resize(1, nx);
+  Jx.setZero();
+
+  v__.resize(nx);
+  v__.setZero();
+}
+
+void Col_cost_moving::calc(Eigen::Ref<Vxd> r, const Eigen::Ref<const Vxd> &x,
+                           const Eigen::Ref<const Vxd> &u) {
+  check_input_calc(r, x, u);
+  calc(r, x);
+}
+
+void Col_cost_moving::calc(Eigen::Ref<Vxd> r, const Eigen::Ref<const Vxd> &x) {
+  check_input_calc(r, x);
+
+  CHECK(model, AT);
+  double raw_d;
+  bool check_one =
+      (x.head(nx_effective) - last_x.head(nx_effective)).norm() < 1e-8;
+  bool check_two = (last_raw_d - margin) > 0 &&
+                   (x.head(nx_effective) - last_x.head(nx_effective)).norm() <
+                       sec_factor * (last_raw_d - margin);
+
+  // std::cout << "checking collisions " << std::endl;
+
+  if (check_one || check_two) {
+    raw_d = last_raw_d;
+  } else {
+    model->collision_distance_time(x.head(nx_effective), time_index, cinfo,
+                                   hard_constrained_collision);
+    raw_d = cinfo.distance;
+    last_x = x;
+    last_raw_d = raw_d;
+  }
+  double d = weight * (raw_d - margin);
+  auto out = Eigen::Matrix<double, 1, 1>(std::min(d, 0.));
+  r = out;
+}
+
+void Col_cost_moving::calcDiff(Eigen::Ref<Eigen::VectorXd> Lx,
+                               Eigen::Ref<Eigen::VectorXd> Lu,
+                               Eigen::Ref<Eigen::MatrixXd> Lxx,
+                               Eigen::Ref<Eigen::MatrixXd> Luu,
+                               Eigen::Ref<Eigen::MatrixXd> Lxu,
+                               const Eigen::Ref<const Eigen::VectorXd> &x,
+                               const Eigen::Ref<const Eigen::VectorXd> &u) {
+  check_input_calcDiff(Lx, Lu, Lxx, Luu, Lxu, x, u);
+  calcDiff(Lx, Lxx, x);
+}
+
+void Col_cost_moving::calcDiff(Eigen::Ref<Eigen::VectorXd> Lx,
+                               Eigen::Ref<Eigen::MatrixXd> Lxx,
+                               const Eigen::Ref<const Eigen::VectorXd> &x) {
+  CHECK(model, AT);
+  check_input_calcDiff(Lx, Lxx, x);
+  Jx.setZero();
+
+  double raw_d, d;
+  bool check_one =
+      (x - last_x).squaredNorm() < 1e-8 && (last_raw_d - margin) > 0;
+  bool check_two = (last_raw_d - margin) > 0 &&
+                   (x - last_x).norm() < sec_factor * (last_raw_d - margin);
+
+  if (check_one || check_two) {
+    ;
+  } else {
+    v__.setZero();
+    model->collision_distance_time_diff(v__, raw_d, x, time_index,
+                                        hard_constrained_collision);
+    last_x = x;
+    last_raw_d = raw_d;
+    d = weight * (raw_d - margin);
+    v__ = v__ * weight;
+    if (d <= 0) {
+      Jx.block(0, 0, 1, nx_effective) = v__.transpose();
+      Lx += d * Jx.transpose();
+      Lxx += Jx.transpose() * Jx;
+    } else {
+      ;
+    }
+  }
+};
 
 Control_cost::Control_cost(size_t nx, size_t nu, size_t nr,
                            const Vxd &t_u_weight, const Vxd &t_u_ref)
