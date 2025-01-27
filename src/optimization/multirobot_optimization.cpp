@@ -2,20 +2,25 @@
 #include <dynobench/multirobot_trajectory.hpp>
 #include <dynoplan/optimization/multirobot_optimization.hpp>
 #include <dynoplan/optimization/ocp.hpp>
+#include <map>
+#include <optional>
 #include <string>
 #include <vector>
+#include <Eigen/Dense>
 
-bool execute_optimizationMultiRobot(const std::string &env_file,
+bool execute_optimizationMultiRobot(const YAML::Node &env,
                                     const std::string &initial_guess_file,
                                     const std::string &output_file,
                                     const std::string &dynobench_base,
-                                    bool sum_robots_cost) {
+                                    bool sum_robots_cost,
+                                    MultiRobotTrajectory* solution) {
 
   using namespace dynoplan;
   using namespace dynobench;
 
   Options_trajopt options_trajopt;
-  Problem problem(env_file);
+  Problem problem;
+  problem.read_from_yaml(env);
 
   MultiRobotTrajectory init_guess_multi_robot;
   init_guess_multi_robot.read_from_yaml(initial_guess_file.c_str());
@@ -81,6 +86,13 @@ bool execute_optimizationMultiRobot(const std::string &env_file,
   MultiRobotTrajectory multi_out = from_joint_to_indiv_trajectory(
       sol, init_guess_multi_robot.get_nxs(), init_guess_multi_robot.get_nus(),
       index_time_goals);
+
+  if (solution){
+    *solution = multi_out;
+    /* auto& map = *solution; */
+    /* const_cast<std::map<std::string, std::vector<Eigen::VectorXd>>&>(map)["states"] = multi_out.trajectories[0].states; */
+    /* const_cast<std::map<std::string, std::vector<Eigen::VectorXd>>&>(map)["actions"] = multi_out.trajectories[0].actions; */
+  }
 
   multi_out.to_yaml_format("/tmp/check5.yaml");
   multi_out.to_yaml_format(output_file.c_str());

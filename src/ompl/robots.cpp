@@ -3105,8 +3105,8 @@ void load_motion_primitives_new(const std::string &motionsFile,
   }
   }
 
+    std::cout << trajs.data.size() << std::endl;
   if (shuffle) {
-    /*std::cout << "SHUFFLING !!!!!!" << std::endl;*/
     std::random_device rd;
     std::shuffle(std::begin(trajs.data), std::end(trajs.data),
                  std::default_random_engine{ rd() });
