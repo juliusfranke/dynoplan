@@ -43,7 +43,9 @@ bool execute_optimizationMultiRobot(const YAML::Node &env,
     std::cout
         << "warning: new approach where each robot tries to reach the goal fast"
         << std::endl;
-    problem.goal_times = goal_times;
+    if (problem.robotTypes.size() > 1) {
+      problem.goal_times = goal_times;
+    }
   }
 
   else {
