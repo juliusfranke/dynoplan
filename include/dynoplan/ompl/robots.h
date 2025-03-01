@@ -257,4 +257,9 @@ void traj_to_motion(const dynobench::Trajectory &traj,
 
 void compute_col_shape(Motion &m, dynobench::Model_robot &robot);
 
+void motion_to_motion(std::vector<Motion> &robot_motions,
+                      std::vector<Motion> &motion_out,
+                      dynobench::Model_robot &robot, size_t N);
+
+
 } // namespace dynoplan
