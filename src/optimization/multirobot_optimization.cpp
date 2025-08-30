@@ -1,4 +1,5 @@
 #include "dynobench/motions.hpp"
+#include <Eigen/Dense>
 #include <dynobench/multirobot_trajectory.hpp>
 #include <dynoplan/optimization/multirobot_optimization.hpp>
 #include <dynoplan/optimization/ocp.hpp>
@@ -6,14 +7,13 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include <Eigen/Dense>
 
 bool execute_optimizationMultiRobot(const YAML::Node &env,
                                     const std::string &initial_guess_file,
                                     const std::string &output_file,
                                     const std::string &dynobench_base,
                                     bool sum_robots_cost,
-                                    MultiRobotTrajectory* solution) {
+                                    MultiRobotTrajectory *solution) {
 
   using namespace dynoplan;
   using namespace dynobench;
@@ -89,11 +89,15 @@ bool execute_optimizationMultiRobot(const YAML::Node &env,
       sol, init_guess_multi_robot.get_nxs(), init_guess_multi_robot.get_nus(),
       index_time_goals);
 
-  if (solution){
+  if (solution) {
     *solution = multi_out;
     /* auto& map = *solution; */
-    /* const_cast<std::map<std::string, std::vector<Eigen::VectorXd>>&>(map)["states"] = multi_out.trajectories[0].states; */
-    /* const_cast<std::map<std::string, std::vector<Eigen::VectorXd>>&>(map)["actions"] = multi_out.trajectories[0].actions; */
+    /* const_cast<std::map<std::string,
+     * std::vector<Eigen::VectorXd>>&>(map)["states"] =
+     * multi_out.trajectories[0].states; */
+    /* const_cast<std::map<std::string,
+     * std::vector<Eigen::VectorXd>>&>(map)["actions"] =
+     * multi_out.trajectories[0].actions; */
   }
 
   multi_out.to_yaml_format("/tmp/check5.yaml");
@@ -110,11 +114,26 @@ bool execute_optimizationMetaRobot(
     const std::string &dynobench_base, std::unordered_set<size_t> &cluster,
     bool sum_robots_cost = true, bool residual_force) {
 
+  using namespace dynobench;
+
+  Problem problem(env_file);
+  return execute_optimizationMetaRobot_problem(problem, init_guess_multi_robot,
+                                               multi_robot_out, dynobench_base,
+                                               cluster, sum_robots_cost);
+}
+
+bool execute_optimizationMetaRobot_problem(
+    dynobench::Problem &problem,
+    MultiRobotTrajectory &init_guess_multi_robot, // discrete search
+    MultiRobotTrajectory
+        &multi_robot_out, // output, initialized with parallel_opt
+    const std::string &dynobench_base, std::unordered_set<size_t> &cluster,
+    bool sum_robots_cost = true, bool residual_force) {
   using namespace dynoplan;
   using namespace dynobench;
 
   Options_trajopt options_trajopt;
-  Problem problem(env_file);
+  // Problem problem(env_file);
 
   std::vector<int> goal_times; // (cluster.size());
   std::vector<int> all_goal_times;

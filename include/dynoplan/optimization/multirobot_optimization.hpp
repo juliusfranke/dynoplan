@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dynobench/motions.hpp"
 #include <bits/stdc++.h>
 /* #include <map> */
 /* #include <optional> */
@@ -18,6 +19,14 @@ bool execute_optimizationMultiRobot(const YAML::Node &env,
 
 bool execute_optimizationMetaRobot(
     const std::string &env_file,
+    //    const std::string &initial_guess_file,
+    MultiRobotTrajectory &multi_robot_initial_guess,
+    MultiRobotTrajectory &multi_robot_out, const std::string &dynobench_base,
+    std::unordered_set<size_t> &cluster, bool sum_robots_cost,
+    bool residual_force = false);
+
+bool execute_optimizationMetaRobot_problem(
+    dynobench::Problem &problem,
     //    const std::string &initial_guess_file,
     MultiRobotTrajectory &multi_robot_initial_guess,
     MultiRobotTrajectory &multi_robot_out, const std::string &dynobench_base,
