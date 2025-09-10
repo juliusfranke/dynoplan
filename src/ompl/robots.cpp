@@ -3172,14 +3172,13 @@ void load_motion_primitives_new(const std::string &motionsFile,
     NOT_IMPLEMENTED;
   }
 
-  /*if (shuffle) {*/
-  /*  std::cout << "SHUFFLING !!!!!!" << std::endl;*/
-  /*  std::random_device rd;*/
-  /*  std::shuffle(std::begin(motions), std::end(motions),*/
-  /*               std::default_random_engine{rd() });*/
-  /*}*/
-  /**/
-  /*motions.resize(trajs.data.size());*/
+  if (shuffle) {
+    // std::shuffle(std::begin(motions), std::end(motions),
+    //  std::default_random_engine{});
+    std::random_device rd;
+    std::default_random_engine eng(rd()); // Seed with random value
+    std::shuffle(std::begin(motions), std::end(motions), eng);
+  }
 
   for (size_t idx = 0; idx < motions.size(); ++idx) {
     motions[idx].idx = idx;
@@ -3207,7 +3206,7 @@ void motion_to_motion(std::vector<Motion> &robot_motions,
                       std::vector<Motion> &motion_out,
                       dynobench::Model_robot &robot, size_t desired_size) {
 
-  std::cout << "before adding " << motion_out.size() << std::endl;
+  // std::cout << "before adding " << motion_out.size() << std::endl;
   size_t N = std::min(desired_size, robot_motions.size());
   std::cout << "N inside motion-to-motion: " << N << std::endl;
   for (size_t i = motion_out.size(); i < N; i++) {
@@ -3220,7 +3219,7 @@ void motion_to_motion(std::vector<Motion> &robot_motions,
     compute_col_shape(m, robot);
     motion_out.push_back(std::move(m));
   }
-  std::cout << "after adding " << motion_out.size() << std::endl;
+  // std::cout << "after adding " << motion_out.size() << std::endl;
 }
 
 void compute_col_shape(Motion &m, dynobench::Model_robot &robot) {
